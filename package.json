@@ -8,12 +8,14 @@
   },
   "scripts": {
     "dev": "wrangler dev",
+    "dev:admin": "wrangler dev -c wrangler.admin.jsonc --port 8788",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
     "e2e:server": "pnpm db:reset:local && pnpm seed:local && wrangler dev --port 8787",
+    "e2e:admin-server": "wait-on http://localhost:8787/healthz && pnpm dev:admin",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate:local",
     "seed:local": "tsx scripts/seed.ts --env local",
@@ -21,7 +23,8 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "hono": "^4.13.14"
+    "hono": "^4.13.14",
+    "jose": "^6.2.13"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.3",
@@ -34,6 +37,7 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "~4.1.12",
+    "wait-on": "^9.5.1",
     "wrangler": "^4.154.0"
   },
   "pnpm": {

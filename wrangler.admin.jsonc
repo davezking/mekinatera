@@ -1,0 +1,96 @@
+// ADMIN Worker (src/admin-worker.ts) on its own workers.dev address, behind Cloudflare Access.
+// Bindings must match wrangler.jsonc for the same env: both Workers share one D1 database and
+// one R2 bucket per environment. Bindings and vars are NOT inherited by environments: when you
+// add one, add it to the top level AND to both env.staging and env.production.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "byd-manuals-admin-dev",
+  "main": "src/admin-worker.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "workers_dev": true,
+  // Preview URLs would share the real database (architecture.md §8).
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "byd-manuals-dev",
+      "database_id": "local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MANUALS", "bucket_name": "byd-manuals-dev" }],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "TELEBIRR_PHONE": "0900000000",
+    "TELEBIRR_NAME": "Test Account",
+    "SUPPORT_CONTACT": "info@mekinatera.com",
+    "CLAIM_WINDOW_DAYS": "7",
+    "TOKEN_TTL_HOURS": "24",
+    "TOKEN_MAX_DOWNLOADS": "3",
+    "POLL_TIMEOUT_MINUTES": "10",
+    // Local dev never verifies a JWT: the bypass applies (development + ADMIN_DEV_BYPASS=1 + localhost).
+    "ACCESS_TEAM_DOMAIN": "https://dev.cloudflareaccess.com",
+    "ACCESS_AUD": "dev-aud",
+    "ADMIN_EMAIL": "dev@localhost",
+    "PUBLIC_SITE_URL": "http://localhost:8787"
+  },
+  "env": {
+    "staging": {
+      "name": "byd-manuals-admin-staging",
+      // Same database and bucket as env.staging in wrangler.jsonc.
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "byd-manuals-staging",
+          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "MANUALS", "bucket_name": "byd-manuals-staging" }],
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "TELEBIRR_PHONE": "0900000000",
+        "TELEBIRR_NAME": "Test Account",
+        "SUPPORT_CONTACT": "info@mekinatera.com",
+        "CLAIM_WINDOW_DAYS": "7",
+        "TOKEN_TTL_HOURS": "24",
+        "TOKEN_MAX_DOWNLOADS": "3",
+        "POLL_TIMEOUT_MINUTES": "10",
+        "ACCESS_TEAM_DOMAIN": "https://REPLACE_WITH_TEAM.cloudflareaccess.com",
+        "ACCESS_AUD": "REPLACE_WITH_STAGING_ACCESS_AUD",
+        "ADMIN_EMAIL": "REPLACE_WITH_OWNER_EMAIL",
+        "PUBLIC_SITE_URL": "https://byd-manuals-staging.REPLACE_WITH_ACCOUNT.workers.dev"
+      }
+    },
+    "production": {
+      "name": "byd-manuals-admin",
+      // Same database and bucket as env.production in wrangler.jsonc.
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "byd-manuals",
+          "database_id": "REPLACE_WITH_PRODUCTION_D1_ID",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "MANUALS", "bucket_name": "byd-manuals" }],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "TELEBIRR_PHONE": "0977328406",
+        "TELEBIRR_NAME": "Dawit As****",
+        "SUPPORT_CONTACT": "info@mekinatera.com",
+        "CLAIM_WINDOW_DAYS": "7",
+        "TOKEN_TTL_HOURS": "24",
+        "TOKEN_MAX_DOWNLOADS": "3",
+        "POLL_TIMEOUT_MINUTES": "10",
+        "ACCESS_TEAM_DOMAIN": "https://REPLACE_WITH_TEAM.cloudflareaccess.com",
+        "ACCESS_AUD": "REPLACE_WITH_PRODUCTION_ACCESS_AUD",
+        "ADMIN_EMAIL": "REPLACE_WITH_OWNER_EMAIL",
+        "PUBLIC_SITE_URL": "https://byd-manuals.REPLACE_WITH_ACCOUNT.workers.dev"
+      }
+    }
+  }
+}
