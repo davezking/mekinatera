@@ -5,12 +5,11 @@ How to build this project with Claude Code, one phase at a time. You are the bui
 ## One-time setup
 
 1. **Repo**: unzip this plan into the repo root and commit it to `main`.
-2. **GitHub secrets** (Settings → Secrets → Actions): `CLOUDFLARE_API_TOKEN` (Workers, D1 and R2 edit permissions), `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`.
-3. **Claude GitHub app**: install it from https://github.com/apps/claude so `claude-code-action` can comment on PRs.
+2. **GitHub secrets** (Settings → Secrets → Actions): `CLOUDFLARE_API_TOKEN` (Workers, D1 and R2 edit permissions), `CLOUDFLARE_ACCOUNT_ID`. No `ANTHROPIC_API_KEY` is needed: there is no Claude review workflow in CI (see **Merging** below).
+3. **Claude GitHub app**: install it from https://github.com/apps/claude so Claude Code (claude.ai/code) can open, review and merge PRs.
 4. **Labels**: `gh label create review:auto; gh label create review:opus; gh label create feedback`.
-5. **Auto-merge**: Settings → General → enable "Allow auto-merge".
-6. **Branch protection rule** for pattern `phase-*`: require a pull request, and require the status checks `check` (CI) and `review` (Claude review). Without required checks, auto-merge merges immediately.
-7. **Cloudflare staging** (do this once P1-S1-T1 is merged):
+5. **Branch protection rule** for pattern `phase-*`: require a pull request and the status check `check` (CI). No auto-merge: a PR is merged only when you ask Claude to review and merge it.
+6. **Cloudflare staging** (do this once P1-S1-T1 is merged):
    ```
    pnpm wrangler d1 create byd-manuals-staging      # paste the id into wrangler.jsonc env.staging
    pnpm wrangler r2 bucket create byd-manuals-staging
@@ -19,7 +18,7 @@ How to build this project with Claude Code, one phase at a time. You are the bui
    pnpm wrangler secret put TURNSTILE_SECRET_KEY --env staging   # test secret 1x0000000000000000000000000000000AA
    ```
    From Phase 2 the admin Worker deploys too; it needs no secrets (its Access settings are plain vars).
-8. **Claude Code permissions**: `.claude/settings.json` allows the commands the task loop needs (pnpm scripts, git, gh) and denies deploys, staging seeding, force-pushes and reading `.dev.vars`. Review it before running headless: `scripts/run-task.sh` uses `--permission-mode acceptEdits`, so file edits are not confirmed one by one.
+7. **Claude Code permissions**: `.claude/settings.json` allows the commands the task loop needs (pnpm scripts, git, gh) and denies deploys, staging seeding, force-pushes and reading `.dev.vars`. Review it before running headless: `scripts/run-task.sh` uses `--permission-mode acceptEdits`, so file edits are not confirmed one by one.
 
 The first push of `phase-1` will fail CI and the staging deploy, because the app doesn't exist yet. That's expected; it goes green once P1-S1-T1 merges.
 
@@ -31,10 +30,11 @@ The first push of `phase-1` will fail CI and the staging deploy, because the app
    - One task: `scripts/run-task.sh P1-S2-T1` (it picks the model from the task file).
    - A whole group in parallel: `scripts/parallel-group.sh 1 2A` → run each printed command in its own terminal. Remove worktrees after merge with `git worktree remove <dir>`.
    - Interactive alternative: open `claude`, `/model sonnet`, `/run-task P1-S2-T1`.
-3. **Merging**
-   - `review:auto` PRs merge themselves once CI and the Claude review both pass.
-   - `review:opus` PRs wait for you. Check out the branch, run `claude --model opus` and ask: "Review this PR against docs/tasks/<ID>.md and CLAUDE.md. Focus on the money path and security." Fix, then merge with `gh pr merge --squash`.
-   - If the Claude review blocks an auto PR, read its comment, then run `claude` on the branch and say "fix the blocking review findings".
+3. **Merging** (nothing merges on its own)
+   - When a task PR is open and CI (`check`) is green, tell Claude: "review and merge <TASK-ID>".
+   - Claude reviews the PR against `docs/tasks/<TASK-ID>.md` and `CLAUDE.md`: acceptance criteria met, listed tests present and meaningful, files outside the task's `files` list explained, conventions (santim, UTC ms, bound SQL, streaming, no PII in logs, timing-safe secret compare), and any path that could release a PDF without a valid payment.
+   - Blocking findings: Claude fixes them on the task branch, waits for CI, then squash-merges into `phase-<N>`. Non-blocking findings are listed in a PR comment.
+   - `review:opus` tasks (money path, security) get the same review with extra depth on those areas, and Claude reports what it checked before merging. Say "review <TASK-ID>" instead if you want to read the review before the merge.
 4. **Watch the preview**: every merge into `phase-<N>` redeploys staging and reseeds demo data. Staging data is reset on every push, so don't keep anything there.
 5. **Phase close-out**
    1. All phase tasks merged; the `E2E` workflow is green on `phase-<N>`.
