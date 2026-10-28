@@ -1,0 +1,45 @@
+{
+  "name": "byd-manuals",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:server": "pnpm db:reset:local && pnpm seed:local && wrangler dev --port 8787",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && pnpm db:migrate:local",
+    "seed:local": "tsx scripts/seed.ts --env local",
+    "seed:staging": "tsx scripts/seed.ts --env staging",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.13.14"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/sora": "^5.3.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "~4.1.12",
+    "wrangler": "^4.154.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  }
+}
