@@ -112,6 +112,8 @@ export type AdminCatalogRow = {
   priceSantim: number | null;
   versionVisible: boolean;
   hasPdf: boolean;
+  r2Key: string | null;
+  fileSize: number | null;
   imageKey: string | null;
 };
 
@@ -127,12 +129,14 @@ type AdminJoinRow = {
   price_santim: number | null;
   version_visible: 0 | 1 | null;
   has_pdf: 0 | 1;
+  r2_key: string | null;
+  file_size: number | null;
 };
 
 const ADMIN_SELECT = `
 SELECT m.id, m.name, m.slug, m.model_year, m.is_visible, m.sort_order, m.image_key,
        v.id AS version_id, v.price_santim, v.is_visible AS version_visible,
-       (v.r2_key IS NOT NULL) AS has_pdf
+       (v.r2_key IS NOT NULL) AS has_pdf, v.r2_key, v.file_size
 FROM car_models m
 LEFT JOIN manual_versions v ON v.car_model_id = m.id AND v.language = 'en'`;
 
@@ -149,6 +153,8 @@ function toAdminRow(row: AdminJoinRow): AdminCatalogRow {
     priceSantim: row.price_santim,
     versionVisible: row.version_visible === 1,
     hasPdf: row.has_pdf === 1,
+    r2Key: row.r2_key,
+    fileSize: row.file_size,
   };
 }
 
