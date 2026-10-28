@@ -800,6 +800,160 @@ svg {
   line-height: 1.55;
 }
 
+/* ---------- Catalog page ---------- */
+.section {
+  padding: 24px 0 8px;
+}
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.section-kicker {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+.hero__actions .btn {
+  flex: 1 1 auto;
+}
+.hero__secondary,
+.hero__inner > .how-card {
+  display: none;
+}
+.how__step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 16px;
+}
+.model-card__image img {
+  width: 230px;
+  max-width: 80%;
+  height: auto;
+}
+.model-card__meta h3 {
+  color: var(--ink);
+}
+.trust {
+  gap: 14px;
+}
+.trust__item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: var(--accent);
+}
+.trust__text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.trust__item strong {
+  color: var(--ink);
+}
+.faq-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.faq-section h2 {
+  font-size: 22px;
+}
+
+/* ---------- Checkout page ---------- */
+.checkout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  min-height: 44px;
+  padding-right: 8px;
+  color: var(--ink-2);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.checkout-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.checkout-head__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+.checkout h1 {
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.model-tile {
+  width: 88px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.model-tile img {
+  width: 70px;
+  height: auto;
+}
+.phone-box__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.help-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+.help-note h2 {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.help-note__text {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.not-found {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 56px;
+  text-align: center;
+}
+.not-found h1 {
+  font-size: 26px;
+}
+
 /* ---------- Responsive ---------- */
 @media (min-width: 900px) {
   :root {
@@ -858,5 +1012,38 @@ svg {
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     gap: 48px;
     align-items: start;
+  }
+  .section {
+    padding: 48px 0 16px;
+  }
+  .section-head {
+    font-size: 15px;
+  }
+  .how-section {
+    display: none;
+  }
+  .hero__secondary {
+    display: inline-flex;
+  }
+  .hero__actions .btn {
+    flex: 0 0 auto;
+    padding: 0 26px;
+  }
+  .hero__inner > .how-card {
+    display: flex;
+  }
+  .faq-section h2 {
+    font-size: 30px;
+  }
+  .checkout h1 {
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .help-note h2 {
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+  .not-found h1 {
+    font-size: 34px;
   }
 }
