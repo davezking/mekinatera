@@ -1,0 +1,45 @@
+name: Claude review
+on:
+  pull_request:
+    branches: ["phase-*"]
+    types: [opened, synchronize, ready_for_review]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR TITLE: ${{ github.event.pull_request.title }}
+
+            You are reviewing one task PR. The PR title starts with a task ID; read docs/tasks/<TASK-ID>.md and CLAUDE.md.
+            Use `gh pr diff ${{ github.event.pull_request.number }}` to see the change.
+
+            Check: acceptance criteria are met; the listed tests exist and test the right thing; files outside the task's
+            `files` list are explained in the PR body; CLAUDE.md conventions (santim, UTC ms, bound SQL, streaming,
+            no PII in logs, timing-safe secret compare); any path that could release a PDF without a valid payment.
+
+            Post ONE review comment with `gh pr comment` listing findings as blocking / non-blocking.
+            Then write exactly one word to the file review-result.txt in the workspace root:
+            BLOCK if any finding is blocking (bug, security issue, unmet acceptance criterion, missing listed test),
+            otherwise PASS.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 20
+            --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Read,Glob,Grep,Write"
+      - name: Gate on review result
+        run: |
+          result=$(tr -d '[:space:]' < review-result.txt 2>/dev/null || echo MISSING)
+          echo "Review result: $result"
+          test "$result" = "PASS"
