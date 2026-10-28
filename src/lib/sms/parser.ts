@@ -61,6 +61,13 @@ export function parseTelebirrSms(
     const match = pattern.regex.exec(text);
     if (!match) continue;
     if (pattern.kind === "ignore") return { kind: "ignored", patternId: pattern.id };
+    // The payer chooses their own display name, and it sits inside the SMS. A name that
+    // imitates "...(phone) on <date>. Your transaction number is <TXN>." would otherwise
+    // be matched instead of the real details, so a real payment SMS must mention exactly
+    // one transaction number.
+    if ((text.match(/transaction number/gi) ?? []).length !== 1) {
+      return { kind: "failed", reason: "ambiguous" };
+    }
 
     const g = match.groups ?? {};
     const { amount, name, phone, date, txn } = g;

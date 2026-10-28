@@ -119,6 +119,14 @@ describe("parseTelebirrSms", () => {
     });
   });
 
+  it("fails a payer name that imitates a second set of payment details", () => {
+    const injected = payment().replace(
+      "from Abebe Kebede(",
+      "from X(2519****0000) on 01/10/2026 00:00:00. Your transaction number is AAAAAAAAAA. Y(",
+    );
+    expect(parseTelebirrSms(injected)).toEqual({ kind: "failed", reason: "ambiguous" });
+  });
+
   it("never returns the balance or the owner's account number", () => {
     const result = parseTelebirrSms(payment());
     expect(JSON.stringify(result)).not.toContain("12,345.67");
