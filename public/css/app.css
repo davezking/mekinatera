@@ -953,6 +953,22 @@ svg {
 .not-found h1 {
   font-size: 26px;
 }
+.status-tile {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.paid-card {
+  gap: 10px;
+  text-align: left;
+}
 
 /* ---------- Responsive ---------- */
 @media (min-width: 900px) {
