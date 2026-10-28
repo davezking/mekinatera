@@ -33,7 +33,7 @@ A small website that sells English translations of China-market BYD owner's manu
 | Unit/integration tests | Vitest + `@cloudflare/vitest-pool-workers` | Tests run inside the real Workers runtime with local D1 and R2 |
 | E2E tests | Playwright (mobile Chrome profile) against `wrangler dev` | Matches the real buyer device |
 | Package manager | pnpm, Node 22 | |
-| CI/CD | GitHub Actions + `cloudflare/wrangler-action` + `anthropics/claude-code-action` | |
+| CI/CD | GitHub Actions + `cloudflare/wrangler-action` | |
 
 ## 3. System architecture
 
@@ -307,12 +307,12 @@ D1, R2 and vars are **not inherited** between wrangler environments, so each `en
 
 **CI (GitHub Actions)**
 - `ci.yml`: on PRs into `phase-*` and `main`: Biome lint, `tsc --noEmit`, Vitest.
-- `claude-review.yml`: on PRs into `phase-*`: automated Claude review (Sonnet) that must write `PASS` for the check to go green.
+- No Claude review workflow: task PRs are reviewed and merged by Claude Code when the owner asks (`docs/WORKFLOW.md` → Merging).
 - `e2e.yml`: on pushes to `phase-*`: Playwright against `wrangler dev` with a freshly migrated and seeded local D1.
 - `deploy-staging.yml`: on pushes to `phase-*`: remote migrations + deploy the public Worker + deploy the admin Worker (once `wrangler.admin.jsonc` exists) + reseed staging.
 - `deploy-production.yml` (added in P3-S1-T3): on tags `v*`, with a manual approval environment.
 
-Repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`.
+Repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
 ## 9. Non-functional requirements
 
@@ -344,7 +344,7 @@ Repo secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KE
 
 - Switch models in Claude Code with `/model haiku|sonnet|opus`, or let `scripts/run-task.sh` pick the model from the task file automatically. Model IDs: `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`.
 - Tasks in the same parallel group can run at the same time in separate git worktrees (`scripts/parallel-group.sh <phase> <group>`). Group names are `<sprint><letter>`, e.g. `2A`. Run groups in order: `1A → 1B → … → 2A …`.
-- The CI and review workflows are already in this plan's `.github/`, so there is no task for them. Repo setup is in `docs/WORKFLOW.md`.
+- The CI workflows are already in this plan's `.github/`, so there is no task for them. Repo setup is in `docs/WORKFLOW.md`.
 
 | Phase | Name | Ends with something you can click | Target |
 |---|---|---|---|

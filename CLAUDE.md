@@ -64,6 +64,7 @@ Never run `wrangler deploy`, `--remote`, or the seed script against production f
 ## Branching
 - `main` = last approved phase. Phase branch `phase-<N>` from `main`.
 - Task branch `task/<TASK-ID>` from `phase-<N>`, PR back into `phase-<N>`, squash merge.
+- No auto-merge and no CI review bot. Never enable auto-merge. Merge a task PR only when the owner says "review and merge <TASK-ID>": review it per `docs/WORKFLOW.md` → Merging, fix blocking findings, wait for green CI, then squash-merge.
 - Approved phase: merge `phase-<N>` → `main`, tag `v0.<N>-phase<N>`.
 
 ## Tasks
