@@ -38,17 +38,98 @@ function Field({
   );
 }
 
+/** Current files for the upload controls (edit page only). */
+export type UploadState = {
+  versionId: number | null;
+  pdfKey: string | null;
+  pdfSize: number | null;
+  imageKey: string | null;
+};
+
+function sizeLabel(bytes: number | null): string {
+  if (bytes === null) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileName(key: string | null): string {
+  return key ? (key.split("/").pop() ?? key) : "";
+}
+
+function UploadControl({
+  id,
+  label,
+  url,
+  accept,
+  current,
+  hint,
+}: {
+  id: string;
+  label: string;
+  url: string;
+  accept: string;
+  current: string | null;
+  hint: string;
+}) {
+  return (
+    <div class="admin-field admin-upload">
+      <label for={id}>{current ? `Replace ${label}` : `Upload ${label}`}</label>
+      <p class="muted">{current ? `Current: ${current}` : `No ${label} yet.`}</p>
+      <input id={id} type="file" accept={accept} data-upload-url={url} />
+      <span class="field-hint">{hint}</span>
+      <progress class="admin-progress" max="100" value="0" hidden />
+      <span class="admin-upload__status" aria-live="polite" />
+    </div>
+  );
+}
+
+function Uploads({ modelId, uploads }: { modelId: number; uploads: UploadState }) {
+  const pdf = uploads.pdfKey ? `${fileName(uploads.pdfKey)} (${sizeLabel(uploads.pdfSize)})` : null;
+  return (
+    <section id="uploads" class="card stack" aria-labelledby="uploads-title">
+      <h2 class="card-title" id="uploads-title">
+        Files
+      </h2>
+      {uploads.versionId === null ? (
+        <p class="muted">Save a price first to create the English manual, then upload its PDF.</p>
+      ) : (
+        <UploadControl
+          id="upload-pdf"
+          label="PDF"
+          url={`/admin/uploads/manual/${uploads.versionId}`}
+          accept="application/pdf,.pdf"
+          current={pdf}
+          hint="PDF, up to 100 MB. The manual can be bought as soon as it is uploaded."
+        />
+      )}
+      <UploadControl
+        id="upload-image"
+        label="car image"
+        url={`/admin/uploads/image/${modelId}`}
+        accept="image/jpeg,image/png,image/webp"
+        current={uploads.imageKey ? fileName(uploads.imageKey) : null}
+        hint="JPEG, PNG or WebP, up to 5 MB. Shown on the catalog card."
+      />
+      <noscript>
+        <p class="field-hint">Uploading needs JavaScript.</p>
+      </noscript>
+    </section>
+  );
+}
+
 export function CatalogEdit({
   modelId,
   values,
   errors = {},
   hasPdf = false,
+  uploads,
 }: {
   /** null = new model. */
   modelId: number | null;
   values: CatalogFormValues;
   errors?: CatalogFormErrors;
   hasPdf?: boolean;
+  uploads?: UploadState;
 }) {
   const isNew = modelId === null;
   const invalid = (key: keyof CatalogFormValues) =>
@@ -162,8 +243,9 @@ export function CatalogEdit({
           </button>
         </form>
       </section>
-      {!isNew && <section id="uploads" class="card stack" aria-label="Uploads" />}
+      {!isNew && uploads && <Uploads modelId={modelId} uploads={uploads} />}
       <script type="module" src="/js/admin-slug.js" />
+      {!isNew && <script type="module" src="/js/admin-upload.js" />}
     </>
   );
 }

@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import type { AdminEnv } from "../../admin-env";
 import {
+  type AdminCatalogRow,
   createModelWithVersion,
   getAdminModel,
   listAdminCatalog,
@@ -16,6 +17,7 @@ import {
   CatalogEdit,
   type CatalogFormErrors,
   type CatalogFormValues,
+  type UploadState,
 } from "../../views/admin/catalog-edit";
 import { CatalogList } from "../../views/admin/catalog-list";
 import { adminPage } from "../../views/admin/layout";
@@ -114,6 +116,15 @@ async function validate(
   };
 }
 
+function uploadState(model: AdminCatalogRow): UploadState {
+  return {
+    versionId: model.versionId,
+    pdfKey: model.r2Key,
+    pdfSize: model.fileSize,
+    imageKey: model.imageKey,
+  };
+}
+
 function idParam(c: Context<AdminEnv>): number | null {
   const id = Number(c.req.param("id"));
   return Number.isSafeInteger(id) && id > 0 ? id : null;
@@ -175,6 +186,7 @@ catalogRoutes.get("/:id", async (c) => {
   return formPage(c, {
     modelId: model.id,
     hasPdf: model.hasPdf,
+    uploads: uploadState(model),
     values: {
       name: model.name,
       slug: model.slug,
@@ -206,7 +218,8 @@ catalogRoutes.post("/:id", async (c) => {
   } catch (err) {
     if (String(err).includes("UNIQUE")) {
       const errors = { slug: "Another model already uses this slug." };
-      return formPage(c, { modelId: model.id, hasPdf: model.hasPdf, values, errors }, 400);
+      const props = { modelId: model.id, hasPdf: model.hasPdf, uploads: uploadState(model) };
+      return formPage(c, { ...props, values, errors }, 400);
     }
     throw err;
   }
