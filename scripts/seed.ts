@@ -1,10 +1,12 @@
-// Seeds demo data into a NON-production environment: car models, manual versions and
-// placeholder PDFs. Usage: tsx scripts/seed.ts --env local|staging
+// Seeds demo data into a NON-production environment: car models, manual versions,
+// placeholder PDFs and demo payments. Usage: tsx scripts/seed.ts --env local|staging
 // It resets every table first, so it is safe to run repeatedly. It refuses production.
 import { execFileSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { redactSms } from "../src/lib/sms/redact";
 
 type SeedEnv = "local" | "staging";
 
@@ -96,7 +98,113 @@ FROM car_models WHERE slug = ${sql(m.slug)};`,
     ];
   });
 
-export const SEED_SECTIONS: SeedSection[] = [resetSection, catalogSection];
+const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
+
+export type DemoPayment = {
+  txn: string;
+  amountEtb: number;
+  /** Milliseconds before the seed run. */
+  ago: number;
+  /** Claimed payments also get an auto order and a used-once download token. */
+  claimed: boolean;
+};
+
+/** Fixed demo transaction numbers used by docs/phases/phase-1-demo.md and the E2E tests. */
+export const DEMO_PAYMENTS: DemoPayment[] = [
+  { txn: "DEMOPAY001", amountEtb: 500, ago: 5 * MINUTE, claimed: false }, // demo happy path
+  { txn: "DEMOPAY002", amountEtb: 500, ago: 5 * MINUTE, claimed: false }, // E2E, one per test
+  { txn: "DEMOPAY003", amountEtb: 500, ago: 5 * MINUTE, claimed: false },
+  { txn: "DEMOPAY004", amountEtb: 500, ago: 5 * MINUTE, claimed: false },
+  { txn: "DEMOPAY005", amountEtb: 500, ago: 5 * MINUTE, claimed: false },
+  { txn: "DEMOLOW001", amountEtb: 300, ago: 5 * MINUTE, claimed: false }, // amount too low
+  { txn: "DEMOOLD001", amountEtb: 500, ago: 10 * DAY, claimed: false }, // expired
+  { txn: "DEMOUSED01", amountEtb: 500, ago: 1 * DAY, claimed: true }, // already used
+];
+
+/** UTC ms → "DD/MM/YYYY HH:mm:ss" in Ethiopia time (UTC+3), as telebirr writes it. */
+export function eatDate(ms: number): string {
+  const d = new Date(ms + 3 * 60 * MINUTE);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+}
+
+export function paymentSms(p: {
+  txn: string;
+  amountEtb: number;
+  name: string;
+  phone: string;
+  paidAt: number;
+}) {
+  return `Dear Customer You have received ETB ${p.amountEtb.toFixed(2)} from ${p.name}(${p.phone}) on ${eatDate(p.paidAt)}. Your transaction number is ${p.txn}. Your current E-Money Account balance is ETB 1,250.00. Thank you for using telebirr`;
+}
+
+function rawSmsInsert(
+  body: string,
+  receivedAt: number,
+  status: string,
+  patternId: string | null,
+  now: number,
+) {
+  return `INSERT INTO raw_sms (sender, body, received_at, parse_status, pattern_id, created_at)
+VALUES ('127', ${sql(redactSms(body))}, ${receivedAt}, ${sql(status)}, ${sql(patternId)}, ${now});`;
+}
+
+const phase1Payments: SeedSection = ({ now }) => {
+  const statements = DEMO_PAYMENTS.flatMap((p, i) => {
+    const n = String(i + 1).padStart(4, "0");
+    const name = `Demo Buyer ${i + 1}`;
+    const phone = `2519****${n}`;
+    const paidAt = now - p.ago;
+    const out = [
+      rawSmsInsert(
+        paymentSms({ ...p, name, phone, paidAt }),
+        paidAt + 5000,
+        "parsed",
+        "t2t-received-v1",
+        now,
+      ),
+      `INSERT INTO payments (transaction_number, amount_santim, payer_name, payer_phone_masked, paid_at, raw_sms_id, status, claimed_at, claim_ref, created_at)
+VALUES (${sql(p.txn)}, ${p.amountEtb * 100}, ${sql(name)}, ${sql(phone)}, ${paidAt}, (SELECT max(id) FROM raw_sms),
+  ${sql(p.claimed ? "claimed" : "unclaimed")}, ${p.claimed ? paidAt + MINUTE : "NULL"}, ${sql(p.claimed ? randomBytes(32).toString("base64url") : null)}, ${paidAt + 5000});`,
+    ];
+    if (p.claimed) {
+      // The raw token is thrown away: this link exists only to show "already used" on claim.
+      const tokenHash = createHash("sha256")
+        .update(randomBytes(32).toString("base64url"))
+        .digest("hex");
+      out.push(
+        `INSERT INTO orders (payment_id, manual_version_id, created_by, created_at)
+SELECT p.id, v.id, 'auto', ${paidAt + MINUTE} FROM payments p, manual_versions v JOIN car_models m ON m.id = v.car_model_id
+WHERE p.transaction_number = ${sql(p.txn)} AND m.slug = 'byd-sealion-2026';`,
+        `INSERT INTO download_tokens (order_id, token_hash, expires_at, max_downloads, download_count, created_at)
+SELECT o.id, ${sql(tokenHash)}, ${paidAt + MINUTE + DAY}, 3, 1, ${paidAt + MINUTE}
+FROM orders o JOIN payments p ON p.id = o.payment_id WHERE p.transaction_number = ${sql(p.txn)};`,
+      );
+    }
+    return out;
+  });
+  // Non-payment SMS for Phase 2's admin lists.
+  statements.push(
+    rawSmsInsert(
+      `Dear Customer You have received ETB 1,000.00 from Commercial Bank of Ethiopia on ${eatDate(now - 30 * MINUTE)} by transaction number FT26DEMO0001. Your current E-Money Account balance is ETB 2,250.00. Thank you for using telebirr`,
+      now - 30 * MINUTE,
+      "ignored",
+      "bank-deposit-v1",
+      now,
+    ),
+    rawSmsInsert(
+      "Demo garbage message that matches no telebirr pattern.",
+      now - 20 * MINUTE,
+      "failed",
+      null,
+      now,
+    ),
+  );
+  return statements;
+};
+
+export const SEED_SECTIONS: SeedSection[] = [resetSection, catalogSection, phase1Payments];
 
 /** A minimal valid one-page PDF 1.4 with a single line of text. */
 export function demoPdf(m: Pick<DemoModel, "name" | "year">): Buffer {
