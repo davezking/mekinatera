@@ -1004,6 +1004,86 @@ svg {
   text-align: left;
 }
 
+/* ---------- Admin (admin Worker only) ---------- */
+.admin-nav a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.admin-table th,
+.admin-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.admin-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.admin-slug {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+}
+.admin-form,
+.admin-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.admin-fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 14px;
+}
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-field label {
+  font-weight: 600;
+}
+.admin-field input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  font: inherit;
+}
+.admin-field input[aria-invalid="true"] {
+  border-color: var(--err-strong);
+}
+.admin-error {
+  color: var(--err-ink);
+  font-size: 13px;
+}
+.admin-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.notice-ok {
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 14px;
+}
+
 /* ---------- Responsive ---------- */
 @media (min-width: 900px) {
   :root {
