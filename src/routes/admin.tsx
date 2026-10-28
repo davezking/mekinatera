@@ -1,12 +1,9 @@
-import type { Context } from "hono";
 import { Hono } from "hono";
-import { raw } from "hono/html";
-import type { JSX } from "hono/jsx/jsx-runtime";
 import type { AdminEnv } from "../admin-env";
 import { HOUR, nowMs } from "../lib/time";
 import { adminAuth } from "../middleware/admin-auth";
 import { Dashboard, type DashboardCounts } from "../views/admin/dashboard";
-import { AdminLayout } from "../views/admin/layout";
+import { adminPage } from "../views/admin/layout";
 import { catalogRoutes } from "./admin/catalog";
 import { ordersRoutes } from "./admin/orders";
 import { paymentsRoutes } from "./admin/payments";
@@ -20,24 +17,6 @@ adminRoutes.route("/catalog", catalogRoutes);
 adminRoutes.route("/uploads", uploadsRoutes);
 adminRoutes.route("/payments", paymentsRoutes);
 adminRoutes.route("/orders", ordersRoutes);
-
-/** Renders a full admin page. Later admin routes use this too. */
-export function adminPage(c: Context<AdminEnv>, title: string, current: string, body: JSX.Element) {
-  return c.html(
-    <>
-      {raw("<!doctype html>")}
-      <AdminLayout
-        title={title}
-        current={current}
-        adminEmail={c.get("adminEmail")}
-        publicSiteUrl={c.env.PUBLIC_SITE_URL}
-        env={c.env.ENVIRONMENT}
-      >
-        {body}
-      </AdminLayout>
-    </>,
-  );
-}
 
 /** Start of the current day in Ethiopia (UTC+3, no DST), as UTC ms. */
 export function startOfEatDay(now: number): number {

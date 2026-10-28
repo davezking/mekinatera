@@ -171,7 +171,7 @@ describe("CSRF", () => {
   });
 
   it("lets a same-origin POST through to the route", async () => {
-    const res = await adminFetch("/admin/catalog", {
+    const res = await adminFetch("/admin/payments", {
       method: "POST",
       headers: { Origin: "http://localhost" },
     });

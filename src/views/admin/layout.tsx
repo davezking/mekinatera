@@ -1,4 +1,8 @@
+import type { Context } from "hono";
+import { raw } from "hono/html";
 import type { Child } from "hono/jsx";
+import type { JSX } from "hono/jsx/jsx-runtime";
+import type { AdminEnv } from "../../admin-env";
 import { LogoIcon } from "../layout";
 
 const NAV = [
@@ -73,5 +77,23 @@ export function AdminLayout({
         </main>
       </body>
     </html>
+  );
+}
+
+/** Renders a full admin page. Later admin routes use this too. */
+export function adminPage(c: Context<AdminEnv>, title: string, current: string, body: JSX.Element) {
+  return c.html(
+    <>
+      {raw("<!doctype html>")}
+      <AdminLayout
+        title={title}
+        current={current}
+        adminEmail={c.get("adminEmail")}
+        publicSiteUrl={c.env.PUBLIC_SITE_URL}
+        env={c.env.ENVIRONMENT}
+      >
+        {body}
+      </AdminLayout>
+    </>,
   );
 }
