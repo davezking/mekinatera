@@ -748,6 +748,34 @@ svg {
   font-family: var(--font-display);
   font-size: 20px;
 }
+.claim-success__txn,
+.claim-waiting__note {
+  font-size: 13px;
+  color: var(--muted);
+}
+.claim-waiting__note {
+  font-size: 12px;
+}
+.claim-waiting__body .muted {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.txn-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.txn-pill__txn {
+  font-weight: 600;
+}
+.claim-form[hidden] {
+  display: none;
+}
 
 /* ---------- Spinner ---------- */
 .spinner {
@@ -768,9 +796,15 @@ svg {
     transform: rotate(360deg);
   }
 }
+.spinner-static {
+  display: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .spinner {
-    animation-duration: 2.4s;
+    display: none;
+  }
+  .spinner-static {
+    display: block;
   }
 }
 
