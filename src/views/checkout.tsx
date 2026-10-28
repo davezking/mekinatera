@@ -133,7 +133,15 @@ export function CheckoutPage({
       </section>
 
       <section class="card claim-card">
-        <form id="claim-form" class="stack claim-form" method="post" novalidate>
+        <div id="claim-status" aria-live="polite" />
+        <form
+          id="claim-form"
+          class="stack claim-form"
+          method="post"
+          novalidate
+          data-support={supportContact}
+          data-price={price}
+        >
           <label class="field-label" for="txn">
             Transaction number
           </label>
@@ -159,7 +167,12 @@ export function CheckoutPage({
             Get my PDF
           </button>
         </form>
-        <div id="claim-status" aria-live="polite" />
+        <noscript>
+          <p class="field-hint">
+            Please enable JavaScript to verify your payment, or contact{" "}
+            <a href={`mailto:${supportContact}`}>{supportContact}</a>.
+          </p>
+        </noscript>
       </section>
 
       <section class="help-note">
