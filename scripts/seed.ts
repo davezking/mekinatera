@@ -87,17 +87,20 @@ const RESET_TABLES = [
 
 const resetSection: SeedSection = () => RESET_TABLES.map((t) => `DELETE FROM ${t};`);
 
-const catalogSection: SeedSection = ({ now }) =>
-  DEMO_MODELS.flatMap((m) => {
-    const pdf = m.hasPdf ? demoPdf(m) : null;
-    return [
-      `INSERT INTO car_models (name, slug, model_year, is_visible, sort_order, created_at, updated_at)
+/** A car model plus its `en` manual version, with the demo PDF's key and size if it has one. */
+function modelInserts(m: DemoModel, priceSantim: number, now: number): string[] {
+  const pdf = m.hasPdf ? demoPdf(m) : null;
+  return [
+    `INSERT INTO car_models (name, slug, model_year, is_visible, sort_order, created_at, updated_at)
 VALUES (${sql(m.name)}, ${sql(m.slug)}, ${sql(m.year)}, ${m.visible ? 1 : 0}, ${m.sortOrder}, ${now}, ${now});`,
-      `INSERT INTO manual_versions (car_model_id, language, price_santim, r2_key, file_size, is_visible, created_at, updated_at)
-SELECT id, 'en', ${DEMO_PRICE_SANTIM}, ${sql(pdf ? demoPdfKey(m.slug) : null)}, ${sql(pdf ? pdf.length : null)}, 1, ${now}, ${now}
+    `INSERT INTO manual_versions (car_model_id, language, price_santim, r2_key, file_size, is_visible, created_at, updated_at)
+SELECT id, 'en', ${priceSantim}, ${sql(pdf ? demoPdfKey(m.slug) : null)}, ${sql(pdf ? pdf.length : null)}, 1, ${now}, ${now}
 FROM car_models WHERE slug = ${sql(m.slug)};`,
-    ];
-  });
+  ];
+}
+
+const catalogSection: SeedSection = ({ now }) =>
+  DEMO_MODELS.flatMap((m) => modelInserts(m, DEMO_PRICE_SANTIM, now));
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -341,17 +344,62 @@ FROM manual_versions v JOIN car_models m ON m.id = v.car_model_id WHERE m.slug =
   return out;
 };
 
+/** The 1 ETB rehearsal product from the launch checklist's Q1b gate (docs/phases/phase-3-demo.md). */
+export const TEST_PRODUCT: DemoModel = {
+  slug: "test-product",
+  name: "Test product",
+  year: "—",
+  sortOrder: 99,
+  visible: true,
+  hasPdf: true,
+};
+
+export const TEST_PRICE_SANTIM = 100;
+
+/** The IP that E2E tests send as X-Test-Client-IP (honoured only in development). */
+export const RATE_LIMIT_DEMO_IP = "203.0.113.7";
+
+/** Phase 3 launch demo: the 1 ETB product, its payment, and an IP close to the rate limit. */
+const phase3Launch: SeedSection = ({ now }) => {
+  const paidAt = now - 5 * MINUTE;
+  const name = "Demo Buyer 40";
+  const phone = "2519****0040";
+  const out = [
+    ...modelInserts(TEST_PRODUCT, TEST_PRICE_SANTIM, now),
+    rawSmsInsert(
+      paymentSms({ txn: "DEMOONE001", amountEtb: 1, name, phone, paidAt }),
+      paidAt + 5000,
+      "parsed",
+      "t2t-received-v1",
+      now,
+    ),
+    `INSERT INTO payments (transaction_number, amount_santim, payer_name, payer_phone_masked, paid_at, raw_sms_id, status, created_at)
+VALUES ('DEMOONE001', ${TEST_PRICE_SANTIM}, ${sql(name)}, ${sql(phone)}, ${paidAt}, (SELECT max(id) FROM raw_sms), 'unclaimed', ${paidAt + 5000});`,
+  ];
+  // 9 of the default 10 per 10 minutes: the next try passes and the one after is RATE_LIMITED.
+  for (let i = 0; i < 9; i++) {
+    out.push(
+      `INSERT INTO claim_attempts (transaction_number_input, manual_version_id, ip, result_code, created_at)
+VALUES (${sql(`GUESS${String(i + 1).padStart(5, "0")}`)}, NULL, ${sql(RATE_LIMIT_DEMO_IP)}, 'NOT_FOUND', ${now - (5 * MINUTE - i * 30_000)});`,
+    );
+  }
+  return out;
+};
+
 export const SEED_SECTIONS: SeedSection[] = [
   resetSection,
   catalogSection,
   phase1Payments,
   phase2Admin,
+  phase3Launch,
 ];
 
 /** A minimal valid one-page PDF 1.4 with a single line of text. */
 export function demoPdf(m: Pick<DemoModel, "name" | "year">): Buffer {
-  // \x97 is the em dash in WinAnsiEncoding.
-  const text = `DEMO \x97 ${m.name} (${m.year}) owner's manual`.replace(/[\\()]/g, "\\$&");
+  // \x97 is the em dash in WinAnsiEncoding (Buffer latin1 would keep only the low byte of U+2014).
+  const text = `DEMO \x97 ${m.name} (${m.year}) owner's manual`
+    .replaceAll("—", "\x97")
+    .replace(/[\\()]/g, "\\$&");
   const stream = `BT /F1 24 Tf 72 720 Td (${text}) Tj ET`;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -394,7 +442,7 @@ function main(): void {
   const pdfDir = join(seedDir, ".pdf");
   mkdirSync(pdfDir, { recursive: true });
 
-  for (const m of DEMO_MODELS.filter((model) => model.hasPdf)) {
+  for (const m of [...DEMO_MODELS, TEST_PRODUCT].filter((model) => model.hasPdf)) {
     const file = join(pdfDir, `${m.slug}-en-demo.pdf`);
     writeFileSync(file, demoPdf(m));
     wrangler([
