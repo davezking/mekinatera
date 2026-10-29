@@ -45,6 +45,7 @@ publicRoutes.get("/m/:slug", async (c) => {
       telebirrPhone={c.env.TELEBIRR_PHONE}
       telebirrName={c.env.TELEBIRR_NAME}
       supportContact={c.env.SUPPORT_CONTACT}
+      turnstileSiteKey={c.env.TURNSTILE_SITE_KEY}
     />,
   );
 });

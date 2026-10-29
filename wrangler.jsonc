@@ -29,7 +29,11 @@
     "CLAIM_WINDOW_DAYS": "7",
     "TOKEN_TTL_HOURS": "24",
     "TOKEN_MAX_DOWNLOADS": "3",
-    "POLL_TIMEOUT_MINUTES": "10"
+    "POLL_TIMEOUT_MINUTES": "10",
+    // Turnstile test site key (always passes); production uses the real one.
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+    "RATE_LIMIT_MAX": "10",
+    "RATE_LIMIT_WINDOW_MINUTES": "10"
   },
   "env": {
     "staging": {
@@ -52,7 +56,10 @@
         "CLAIM_WINDOW_DAYS": "7",
         "TOKEN_TTL_HOURS": "24",
         "TOKEN_MAX_DOWNLOADS": "3",
-        "POLL_TIMEOUT_MINUTES": "10"
+        "POLL_TIMEOUT_MINUTES": "10",
+        "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+        "RATE_LIMIT_MAX": "10",
+        "RATE_LIMIT_WINDOW_MINUTES": "10"
       }
     },
     "production": {
@@ -75,7 +82,10 @@
         "CLAIM_WINDOW_DAYS": "7",
         "TOKEN_TTL_HOURS": "24",
         "TOKEN_MAX_DOWNLOADS": "3",
-        "POLL_TIMEOUT_MINUTES": "10"
+        "POLL_TIMEOUT_MINUTES": "10",
+        "TURNSTILE_SITE_KEY": "REPLACE_WITH_PRODUCTION_TURNSTILE_SITE_KEY",
+        "RATE_LIMIT_MAX": "10",
+        "RATE_LIMIT_WINDOW_MINUTES": "10"
       }
     }
   }

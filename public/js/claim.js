@@ -52,6 +52,46 @@ if (form && input && status) {
   let stopPolling = null;
   let elapsedTimer = null;
   let waiting = null; // { txn, ticket, startedAt } while polling
+  let checking = false;
+  // Turnstile (PRD security): submit stays disabled until the widget gives a token. Each token
+  // is single-use, so the widget is reset after every POST and a retry waits for a fresh one.
+  let turnstileToken = null;
+  let widgetId = null;
+
+  function updateButton() {
+    button.disabled = checking || !turnstileToken;
+  }
+
+  function renderTurnstile() {
+    const slot = document.getElementById("turnstile-slot");
+    if (!slot || !window.turnstile || widgetId !== null) return;
+    widgetId = window.turnstile.render(slot, {
+      sitekey: slot.dataset.sitekey,
+      callback: (token) => {
+        turnstileToken = token;
+        updateButton();
+      },
+      "expired-callback": () => {
+        turnstileToken = null;
+        updateButton();
+      },
+      "error-callback": () => {
+        turnstileToken = null;
+        updateButton();
+      },
+    });
+  }
+
+  function resetTurnstile() {
+    turnstileToken = null;
+    updateButton();
+    if (window.turnstile && widgetId !== null) window.turnstile.reset(widgetId);
+  }
+
+  // api.js loads async: render now if it is already here, otherwise from its onload callback.
+  if (window.turnstile) renderTurnstile();
+  else window.onTurnstileLoad = renderTurnstile;
+  updateButton();
 
   function stopAll() {
     stopPolling?.();
@@ -61,7 +101,8 @@ if (form && input && status) {
   }
 
   function setChecking(on) {
-    button.disabled = on;
+    checking = on;
+    updateButton();
     button.replaceChildren(
       ...(on
         ? [el("span", { class: "spinner", "aria-hidden": "true" }), "Checking…"]
@@ -247,18 +288,20 @@ if (form && input && status) {
       return;
     }
     status.replaceChildren();
+    const token = turnstileToken;
     setChecking(true);
     let result = null;
     try {
       const res = await fetch("/api/claim", {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ transactionNumber: txn, versionId }),
+        body: JSON.stringify({ transactionNumber: txn, versionId, turnstileToken: token }),
       });
       result = await res.json();
     } catch {
       result = null;
     }
+    resetTurnstile();
     handle(result, txn);
   });
 

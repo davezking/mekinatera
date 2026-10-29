@@ -22,13 +22,18 @@ type CheckoutProps = {
   telebirrPhone: string;
   telebirrName: string;
   supportContact: string;
+  /** Public Turnstile site key; public/js/claim.js renders the widget into #turnstile-slot. */
+  turnstileSiteKey: string;
 };
+
+const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
 export function CheckoutPage({
   model,
   telebirrPhone,
   telebirrName,
   supportContact,
+  turnstileSiteKey,
 }: CheckoutProps) {
   const price = santimToEtbLabel(model.version.priceSantim);
   return (
@@ -162,7 +167,7 @@ export function CheckoutPage({
             numbers.
           </p>
           <input type="hidden" name="versionId" value={String(model.version.id)} />
-          <div id="turnstile-slot" />
+          <div id="turnstile-slot" data-sitekey={turnstileSiteKey} />
           <button type="submit" class="btn btn-block btn-lg">
             Get my PDF
           </button>
@@ -185,6 +190,8 @@ export function CheckoutPage({
 
       <script type="module" src="/js/copy.js" />
       <script type="module" src="/js/claim.js" />
+      {/* Explicit render: claim.js renders the widget, either right away or from this onload. */}
+      <script src={`${TURNSTILE_SCRIPT}?render=explicit&onload=onTurnstileLoad`} async defer />
     </div>
   );
 }
