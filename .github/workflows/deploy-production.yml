@@ -1,0 +1,89 @@
+name: Deploy production
+# Production deploys only from a v* tag on main, after a required reviewer approves the
+# `production` environment (GitHub → Settings → Environments → production → Required reviewers).
+# Never seeds: production data is real. See docs/launch-checklist.md.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  verify:
+    # Runs before the approval prompt, so a bad tag fails without asking anyone.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse tags that are not on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} ($GITHUB_SHA) is not on main. Production deploys only from main."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse unfinished production config
+        # Every REPLACE_WITH_* value under env.production must be filled in, in both configs.
+        # env.production is the last block of each file, so everything after its key is checked.
+        run: |
+          node -e '
+            const fs = require("fs");
+            const bad = [];
+            for (const file of ["wrangler.jsonc", "wrangler.admin.jsonc"]) {
+              const text = fs.readFileSync(file, "utf8");
+              const at = text.indexOf("\"production\":");
+              if (at < 0) {
+                console.error(`::error::${file}: no env.production block`);
+                process.exit(1);
+              }
+              const left = text.slice(at).match(/REPLACE_WITH_[A-Z0-9_]+/g);
+              if (left) bad.push(`${file} (${[...new Set(left)].join(", ")})`);
+            }
+            if (bad.length > 0) {
+              console.error(`::error::Production config still has placeholders: ${bad.join("; ")}. See docs/launch-checklist.md.`);
+              process.exit(1);
+            }
+          '
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply D1 migrations (production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply DB --env production --remote
+      - name: Deploy production Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env production
+      - name: Deploy production admin Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy -c wrangler.admin.jsonc --env production

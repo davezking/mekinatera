@@ -6,7 +6,7 @@
 // with links they created themselves. Seeded payments are only read, except DEMOFLAG01 (step 11).
 import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 import { ADMIN_URL } from "../playwright.config";
-import { postHeartbeat, uploadFile } from "./helpers";
+import { postHeartbeat, uploadFile, useUniqueClientIp } from "./helpers";
 
 const FIXTURES = "e2e/fixtures";
 const TINY_PDF = `${FIXTURES}/tiny.pdf`;
@@ -14,6 +14,9 @@ const NOT_A_PDF = `${FIXTURES}/not-a-pdf.pdf`;
 const CAR_PNG = `${FIXTURES}/car.png`;
 
 const admin = (path: string) => `${ADMIN_URL}${path}`;
+
+// No claims here, but public pages visited from this file still get their own client IP.
+useUniqueClientIp(test);
 
 /** A model name no other test or earlier run uses. */
 function uniqueName(base: string): string {

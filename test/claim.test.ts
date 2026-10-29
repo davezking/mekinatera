@@ -5,10 +5,15 @@ import type { DownloadTokenRow, OrderRow, PaymentRow } from "../src/lib/db/types
 import { createTicket, verifyTicket } from "../src/lib/ticket";
 import { DAY, HOUR, MINUTE } from "../src/lib/time";
 import { hashToken } from "../src/lib/token";
+import { SITEVERIFY_URL } from "../src/lib/turnstile";
 
 const NOW = 1_790_000_000_000;
 const ORIGIN = "https://example.com";
 const TXN = "DIQ55JS1ED";
+/** The stubbed siteverify accepts only this token. */
+const GOOD_TOKEN = "turnstile-ok";
+
+let siteverifyCalls: URLSearchParams[];
 
 let versionId: number;
 let hiddenVersionId: number;
@@ -88,6 +93,17 @@ beforeEach(async () => {
   noPdfVersionId = await insertVersion("byd-dolphin-2025", { r2Key: null });
   hiddenModelVersionId = await insertVersion("byd-han-2024", { modelVisible: 0 });
   vi.spyOn(console, "log").mockImplementation(() => {});
+  siteverifyCalls = [];
+  const realFetch = globalThis.fetch;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url !== SITEVERIFY_URL) return realFetch(input, init);
+    const form = new URLSearchParams(init?.body as URLSearchParams);
+    siteverifyCalls.push(form);
+    return new Response(JSON.stringify({ success: form.get("response") === GOOD_TOKEN }), {
+      headers: { "content-type": "application/json" },
+    });
+  });
 });
 
 afterEach(() => {
@@ -298,17 +314,32 @@ describe("createOrderWithToken", () => {
 });
 
 describe("POST /api/claim", () => {
-  function post(body: unknown) {
+  function post(body: unknown, ip = "198.51.100.4") {
     return SELF.fetch(`${ORIGIN}/api/claim`, {
       method: "POST",
-      headers: { "content-type": "application/json", "CF-Connecting-IP": "198.51.100.4" },
+      headers: { "content-type": "application/json", "CF-Connecting-IP": ip },
       body: typeof body === "string" ? body : JSON.stringify(body),
     });
   }
 
+  async function pastAttempts(ip: string, count: number, at: number) {
+    await env.DB.batch(
+      Array.from({ length: count }, () =>
+        env.DB.prepare(
+          `INSERT INTO claim_attempts (transaction_number_input, manual_version_id, ip, result_code, created_at)
+           VALUES ('XXXXXXXXXX', NULL, ?, 'NOT_FOUND', ?)`,
+        ).bind(ip, at),
+      ),
+    );
+  }
+
   it("claims a payment and returns a download URL on this origin", async () => {
     await insertPayment(TXN, 50000, Date.now() - HOUR);
-    const res = await post({ transactionNumber: "diq55js1ed", versionId });
+    const res = await post({
+      transactionNumber: "diq55js1ed",
+      versionId,
+      turnstileToken: GOOD_TOKEN,
+    });
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(await res.json()).toEqual({
@@ -316,21 +347,122 @@ describe("POST /api/claim", () => {
       downloadUrl: expect.stringMatching(/^https:\/\/example\.com\/d\/[A-Za-z0-9_-]{43}$/),
     });
     expect(await all("SELECT ip FROM claim_attempts")).toEqual([{ ip: "198.51.100.4" }]);
+    expect(siteverifyCalls).toHaveLength(1);
+    expect(siteverifyCalls[0]?.get("remoteip")).toBe("198.51.100.4");
   });
 
   it.each([
-    ["not JSON", "{nope"],
     ["null", "null"],
     ["missing number", { versionId: 1 }],
     ["numeric transaction number", { transactionNumber: 123, versionId: 1 }],
     ["string version id", { transactionNumber: TXN, versionId: "1" }],
     ["fractional version id", { transactionNumber: TXN, versionId: 1.5 }],
     ["zero version id", { transactionNumber: TXN, versionId: 0 }],
-  ])("returns 400 for %s", async (_label, body) => {
-    const res = await post(body);
+  ])("returns 400 for %s (after the bot check)", async (_label, body) => {
+    const res = await post(
+      typeof body === "string" ? body : { ...body, turnstileToken: GOOD_TOKEN },
+    );
+    // "null" has no token, so the bot check stops it first.
+    if (body === "null") {
+      expect(res.status).toBe(403);
+      return;
+    }
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ status: "error", code: "INVALID_REQUEST" });
     expect(await all("SELECT id FROM claim_attempts")).toHaveLength(0);
+  });
+
+  it.each([
+    ["no token", {}],
+    ["an invalid token", { turnstileToken: "bad-token" }],
+    ["an empty token", { turnstileToken: "" }],
+  ])("returns 403 BOT_CHECK_FAILED with %s and evaluates nothing else", async (_label, extra) => {
+    await insertPayment(TXN, 50000, Date.now() - HOUR);
+    const res = await post({ transactionNumber: TXN, versionId, ...extra });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ status: "error", code: "BOT_CHECK_FAILED" });
+    expect((await getPayment())?.status).toBe("unclaimed");
+    expect(await all("SELECT id FROM orders")).toHaveLength(0);
+    expect(
+      await all(
+        "SELECT transaction_number_input, manual_version_id, ip, result_code FROM claim_attempts",
+      ),
+    ).toEqual([
+      {
+        transaction_number_input: TXN,
+        manual_version_id: versionId,
+        ip: "198.51.100.4",
+        result_code: "BOT_CHECK_FAILED",
+      },
+    ]);
+  });
+
+  it("returns 403 for a body that is not JSON", async () => {
+    const res = await post("{nope");
+    expect(res.status).toBe(403);
+    expect(await all("SELECT result_code FROM claim_attempts")).toEqual([
+      { result_code: "BOT_CHECK_FAILED" },
+    ]);
+  });
+
+  it("limits the 11th request from one IP within 10 minutes, even with valid input", async () => {
+    await insertPayment(TXN, 50000, Date.now() - HOUR);
+    for (let i = 0; i < 10; i++) {
+      const res = await post({
+        transactionNumber: "DXXXXXXX00",
+        versionId,
+        turnstileToken: GOOD_TOKEN,
+      });
+      expect(res.status).toBe(200);
+    }
+    const before = siteverifyCalls.length;
+    const res = await post({ transactionNumber: TXN, versionId, turnstileToken: GOOD_TOKEN });
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({ status: "error", code: "RATE_LIMITED" });
+    expect(siteverifyCalls).toHaveLength(before); // limited before the bot check
+    expect((await getPayment())?.status).toBe("unclaimed");
+    expect(
+      await all("SELECT result_code FROM claim_attempts WHERE result_code = 'RATE_LIMITED'"),
+    ).toHaveLength(1);
+
+    // Another IP is unaffected.
+    const other = await post(
+      { transactionNumber: TXN, versionId, turnstileToken: GOOD_TOKEN },
+      "198.51.100.5",
+    );
+    expect(await other.json()).toMatchObject({ status: "ok" });
+  });
+
+  it("does not count attempts older than the window", async () => {
+    await insertPayment(TXN, 50000, Date.now() - HOUR);
+    await pastAttempts("198.51.100.4", 10, Date.now() - 11 * MINUTE);
+    const res = await post({ transactionNumber: TXN, versionId, turnstileToken: GOOD_TOKEN });
+    expect(await res.json()).toMatchObject({ status: "ok" });
+  });
+
+  it("counts blocked attempts too, so a client that keeps trying stays limited", async () => {
+    await pastAttempts("198.51.100.4", 10, Date.now() - MINUTE);
+    for (let i = 0; i < 3; i++) {
+      expect((await post({ transactionNumber: TXN, versionId })).status).toBe(429);
+    }
+    expect(
+      await all("SELECT id FROM claim_attempts WHERE result_code = 'RATE_LIMITED'"),
+    ).toHaveLength(3);
+  });
+
+  it("uses X-Test-Client-IP in development (E2E tests share localhost)", async () => {
+    await pastAttempts("127.0.0.1", 10, Date.now() - MINUTE);
+    const res = await SELF.fetch(`${ORIGIN}/api/claim`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "CF-Connecting-IP": "127.0.0.1",
+        "X-Test-Client-IP": "203.0.113.50",
+      },
+      body: JSON.stringify({ transactionNumber: TXN, versionId, turnstileToken: GOOD_TOKEN }),
+    });
+    expect(res.status).toBe(200);
+    expect(await all("SELECT ip FROM claim_attempts WHERE ip = '203.0.113.50'")).toHaveLength(1);
   });
 });
 
@@ -343,7 +475,7 @@ describe("GET /api/claim/status", () => {
     const res = await SELF.fetch(`${ORIGIN}/api/claim`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ transactionNumber: TXN, versionId }),
+      body: JSON.stringify({ transactionNumber: TXN, versionId, turnstileToken: GOOD_TOKEN }),
     });
     const first = (await res.json()) as { status: string; ticket: string };
     expect(first.status).toBe("pending");
@@ -365,6 +497,29 @@ describe("GET /api/claim/status", () => {
       { result_code: "PENDING", ip: "unknown" },
       { result_code: "OK", ip: "unknown" },
     ]);
+  });
+
+  it("works without Turnstile and is not rate-limited", async () => {
+    const ip = "198.51.100.9";
+    await env.DB.batch(
+      Array.from({ length: 10 }, () =>
+        env.DB.prepare(
+          `INSERT INTO claim_attempts (transaction_number_input, manual_version_id, ip, result_code, created_at)
+           VALUES ('XXXXXXXXXX', NULL, ?, 'NOT_FOUND', ?)`,
+        ).bind(ip, Date.now() - MINUTE),
+      ),
+    );
+    const ticket = await createTicket(env.TICKET_SECRET, {
+      txn: TXN,
+      versionId,
+      expiresAt: Date.now() + MINUTE,
+    });
+    const headers = { "CF-Connecting-IP": ip };
+    const url = `${ORIGIN}/api/claim/status?ticket=${encodeURIComponent(ticket)}`;
+    expect(await (await SELF.fetch(url, { headers })).json()).toMatchObject({ status: "pending" });
+    await insertPayment(TXN, 50000, Date.now() - MINUTE);
+    expect(await (await SELF.fetch(url, { headers })).json()).toMatchObject({ status: "ok" });
+    expect(siteverifyCalls).toHaveLength(0);
   });
 
   it("returns NOT_FOUND for an expired ticket and records one attempt", async () => {
