@@ -168,7 +168,12 @@ describe("GET /m/:slug (checkout)", () => {
     // The hint is display-only: no pattern attribute that would require a leading D.
     expect(text).not.toMatch(/<input id="txn"[^>]*pattern=/);
     expect(text).toContain(`<input type="hidden" name="versionId" value="${versionId}"/>`);
-    expect(text).toContain('<div id="turnstile-slot"></div>');
+    expect(text).toContain(
+      '<div id="turnstile-slot" data-sitekey="1x00000000000000000000AA"></div>',
+    );
+    expect(text).toContain(
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=onTurnstileLoad",
+    );
     expect(text).toContain("Get my PDF");
     expect(text).toContain('<div id="claim-status" aria-live="polite"></div>');
     expect(text).toContain('<script type="module" src="/js/claim.js"></script>');
