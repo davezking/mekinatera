@@ -1,3 +1,4 @@
+import type { Child } from "hono/jsx";
 import type { AdminPaymentDetail } from "../../lib/db/admin-queries";
 import { santimToEtbLabel } from "../../lib/money";
 import { downloadsLabel, linkLabel } from "./orders-list";
@@ -12,7 +13,16 @@ function Row({ label, children }: { label: string; children: unknown }) {
   );
 }
 
-export function PaymentDetail({ payment: p, now }: { payment: AdminPaymentDetail; now: number }) {
+export function PaymentDetail({
+  payment: p,
+  now,
+  actions,
+}: {
+  payment: AdminPaymentDetail;
+  now: number;
+  /** Approve / new link forms (views/admin/payment-actions.tsx). */
+  actions?: Child;
+}) {
   const o = p.order;
   return (
     <>
@@ -85,8 +95,7 @@ export function PaymentDetail({ payment: p, now }: { payment: AdminPaymentDetail
         )}
       </section>
 
-      {/* Approve / revoke / resend actions arrive in P2-S2-T3. */}
-      <section id="actions" />
+      <section id="actions">{actions}</section>
     </>
   );
 }

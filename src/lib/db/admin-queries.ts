@@ -324,3 +324,9 @@ export async function getPayment(db: D1Database, id: number): Promise<AdminPayme
     order: order ? toOrder(order) : null,
   };
 }
+
+/** One order with its newest token, or null. */
+export async function getOrder(db: D1Database, id: number): Promise<AdminOrder | null> {
+  const row = await db.prepare(`${ORDER_SELECT} WHERE o.id = ?`).bind(id).first<OrderRow>();
+  return row ? toOrder(row) : null;
+}

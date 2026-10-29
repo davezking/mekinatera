@@ -12,12 +12,15 @@ import {
 import { nowMs } from "../../lib/time";
 import { adminPage } from "../../views/admin/layout";
 import { OrdersList } from "../../views/admin/orders-list";
+import { PaymentActions } from "../../views/admin/payment-actions";
 import { PaymentDetail } from "../../views/admin/payment-detail";
 import { PaymentsList } from "../../views/admin/payments";
 import { type SmsFilter, SmsList } from "../../views/admin/sms";
+import { versionOptions } from "./orders";
 
-// /admin/payments: payments, SMS and orders lists (FR-7, FR-25). Read-only; the actions on
-// /admin/orders come in P2-S2-T3. These pages show payer names and phones: admin Worker only.
+// /admin/payments: payments, SMS and orders lists (FR-7, FR-25). Read-only; the forms on the
+// detail page post to /admin/orders (routes/admin/orders.tsx). These pages show payer names and
+// phones: admin Worker only.
 export const paymentsRoutes = new Hono<AdminEnv>();
 
 /** Missing `before` is the first page; a malformed one is a 400 rather than a silent reset. */
@@ -75,10 +78,15 @@ paymentsRoutes.get("/orders", async (c) => {
 paymentsRoutes.get("/:id{[0-9]{1,16}}", async (c) => {
   const payment = await getPayment(c.env.DB, Number(c.req.param("id")));
   if (!payment) return c.notFound();
+  const versions = await versionOptions(c.env.DB);
   return adminPage(
     c,
     `Payment ${payment.txn}`,
     "/admin/payments",
-    <PaymentDetail payment={payment} now={nowMs()} />,
+    <PaymentDetail
+      payment={payment}
+      now={nowMs()}
+      actions={<PaymentActions payment={payment} versions={versions} />}
+    />,
   );
 });

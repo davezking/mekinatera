@@ -1,4 +1,5 @@
 import { type AdminOrder, linkStatus, type TokenSummary } from "../../lib/db/admin-queries";
+import { NewLinkButton } from "./payment-actions";
 import { formatEat, LINK_LABEL, OlderLink } from "./payments";
 
 export function downloadsLabel(token: TokenSummary | null): string {
@@ -20,9 +21,14 @@ export function OrdersList({
 }) {
   return (
     <section class="card stack" aria-labelledby="orders-title">
-      <h1 class="card-title" id="orders-title">
-        Orders
-      </h1>
+      <div class="admin-head">
+        <h1 class="card-title" id="orders-title">
+          Orders
+        </h1>
+        <a class="btn btn-dark btn-sm" href="/admin/orders/manual">
+          Approve without a payment
+        </a>
+      </div>
       {rows.length === 0 ? (
         <p class="muted">No orders yet.</p>
       ) : (
@@ -36,6 +42,9 @@ export function OrdersList({
                 <th scope="col">Manual</th>
                 <th scope="col">Downloads</th>
                 <th scope="col">Link</th>
+                <th scope="col">
+                  <span class="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -55,6 +64,9 @@ export function OrdersList({
                   </td>
                   <td>{downloadsLabel(o.token)}</td>
                   <td>{linkLabel(o.token, now)}</td>
+                  <td>
+                    <NewLinkButton order={o} />
+                  </td>
                 </tr>
               ))}
             </tbody>

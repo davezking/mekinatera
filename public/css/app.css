@@ -1063,6 +1063,17 @@ svg {
   background: var(--surface);
   font: inherit;
 }
+.admin-field select,
+.admin-field textarea {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  font: inherit;
+}
+.admin-field select[aria-invalid="true"],
+.admin-field textarea[aria-invalid="true"],
 .admin-field input[aria-invalid="true"] {
   border-color: var(--err-strong);
 }
