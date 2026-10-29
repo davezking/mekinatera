@@ -1076,6 +1076,48 @@ svg {
   gap: 8px;
   min-height: 44px;
 }
+.admin-table-wrap {
+  overflow-x: auto;
+}
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  text-decoration: none;
+}
+.admin-tabs a[aria-current="page"] {
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.admin-dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.admin-dl > div {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 12px;
+}
+.admin-dl dt {
+  color: var(--muted);
+}
+.admin-dl dd {
+  margin: 0;
+}
+.admin-sms-body {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
 .notice-ok {
   padding: 12px 14px;
   border-radius: var(--radius-m);
