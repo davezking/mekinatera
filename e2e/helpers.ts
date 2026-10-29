@@ -1,4 +1,10 @@
-import { type APIRequestContext, expect, type Page, request } from "@playwright/test";
+import {
+  type APIRequestContext,
+  expect,
+  type Page,
+  type Response,
+  request,
+} from "@playwright/test";
 
 export const BASE_URL = "http://localhost:8787";
 const WEBHOOK_SECRET = "dev-webhook-secret";
@@ -64,4 +70,30 @@ export async function versionIdFor(api: APIRequestContext, slug: string): Promis
   const id = models.find((m) => m.slug === slug)?.versions[0]?.id;
   if (id === undefined) throw new Error(`No version for ${slug}`);
   return id;
+}
+
+/** Posts a phone heartbeat (MacroDroid's 30-minute ping, docs/phone-setup.md). */
+export async function postHeartbeat(battery?: number): Promise<void> {
+  const api = await request.newContext({ baseURL: BASE_URL });
+  try {
+    const res = await api.post("/api/heartbeat", {
+      headers: { "X-Webhook-Secret": WEBHOOK_SECRET },
+      data: battery === undefined ? {} : { battery },
+    });
+    expect(res.status()).toBe(200);
+  } finally {
+    await api.dispose();
+  }
+}
+
+/**
+ * Picks a file in an admin upload control (public/js/admin-upload.js PUTs it straight away) and
+ * returns the upload's response. On success the page reloads itself; assert on the reloaded page.
+ */
+export async function uploadFile(page: Page, selector: string, path: string): Promise<Response> {
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.request().method() === "PUT" && r.url().includes("/uploads/")),
+    page.locator(selector).setInputFiles(path),
+  ]);
+  return response;
 }
