@@ -82,6 +82,7 @@ const RESET_TABLES = [
   "raw_sms",
   "manual_versions",
   "car_models",
+  "system_status",
 ];
 
 const resetSection: SeedSection = () => RESET_TABLES.map((t) => `DELETE FROM ${t};`);
@@ -204,7 +205,148 @@ FROM orders o JOIN payments p ON p.id = o.payment_id WHERE p.transaction_number 
   return statements;
 };
 
-export const SEED_SECTIONS: SeedSection[] = [resetSection, catalogSection, phase1Payments];
+const HOUR = 60 * MINUTE;
+
+export type LinkState = "active" | "expired" | "used_up" | "revoked";
+
+export type HistoryPayment = { txn: string; daysAgo: number; slug: string; link: LinkState };
+
+/** Claimed payments over the last 20 days, so the admin lists and pagination look real. */
+export const HISTORY_PAYMENTS: HistoryPayment[] = [
+  { txn: "DEMOHIST01", daysAgo: 0.2, slug: "byd-sealion-2026", link: "active" },
+  { txn: "DEMOHIST02", daysAgo: 0.6, slug: "byd-e2-2025", link: "active" },
+  { txn: "DEMOHIST03", daysAgo: 1.5, slug: "byd-sealion-2026", link: "used_up" },
+  { txn: "DEMOHIST04", daysAgo: 2.5, slug: "byd-e2-2025", link: "expired" },
+  { txn: "DEMOHIST05", daysAgo: 4, slug: "byd-sealion-2026", link: "revoked" },
+  { txn: "DEMOHIST06", daysAgo: 5.5, slug: "byd-sealion-2026", link: "expired" },
+  { txn: "DEMOHIST07", daysAgo: 7, slug: "byd-e2-2025", link: "used_up" },
+  { txn: "DEMOHIST08", daysAgo: 9, slug: "byd-sealion-2026", link: "expired" },
+  { txn: "DEMOHIST09", daysAgo: 11.5, slug: "byd-e2-2025", link: "revoked" },
+  { txn: "DEMOHIST10", daysAgo: 14, slug: "byd-sealion-2026", link: "expired" },
+  { txn: "DEMOHIST11", daysAgo: 17, slug: "byd-sealion-2026", link: "used_up" },
+  { txn: "DEMOHIST12", daysAgo: 19.5, slug: "byd-e2-2025", link: "expired" },
+];
+
+/** A throwaway token hash: these seeded links are for the lists only and can never be opened. */
+function seedTokenHash(): string {
+  return createHash("sha256").update(randomBytes(32).toString("base64url")).digest("hex");
+}
+
+/**
+ * download_tokens values for a link created at `createdAt` that is in `state` at `now`. Each link
+ * lasts 24 h, so "active" needs createdAt within the last day and "expired" an older one.
+ */
+function tokenFor(state: LinkState, createdAt: number) {
+  const expiresAt = createdAt + DAY;
+  if (state === "used_up") return { expiresAt, count: 3, revokedAt: null };
+  if (state === "revoked") return { expiresAt, count: 0, revokedAt: createdAt + 2 * HOUR };
+  return { expiresAt, count: 1, revokedAt: null };
+}
+
+function tokenInsert(orderSql: string, state: LinkState, createdAt: number) {
+  const t = tokenFor(state, createdAt);
+  return `INSERT INTO download_tokens (order_id, token_hash, expires_at, max_downloads, download_count, revoked_at, created_at)
+SELECT o.id, ${sql(seedTokenHash())}, ${t.expiresAt}, 3, ${t.count}, ${sql(t.revokedAt)}, ${createdAt}
+FROM ${orderSql};`;
+}
+
+/** Phase 2 admin demo (docs/phases/phase-2-demo.md). Phase 1 transaction numbers stay as they are. */
+const phase2Admin: SeedSection = ({ now }) => {
+  const out: string[] = [];
+  const payment = (
+    txn: string,
+    amountEtb: number,
+    n: number,
+    paidAt: number,
+    status: "flagged" | "claimed",
+  ) => {
+    const name = `Demo Buyer ${n}`;
+    const phone = `2519****${String(n).padStart(4, "0")}`;
+    out.push(
+      rawSmsInsert(
+        paymentSms({ txn, amountEtb, name, phone, paidAt }),
+        paidAt + 5000,
+        "parsed",
+        "t2t-received-v1",
+        now,
+      ),
+      `INSERT INTO payments (transaction_number, amount_santim, payer_name, payer_phone_masked, paid_at, raw_sms_id, status, claimed_at, claim_ref, flag_reason, created_at)
+VALUES (${sql(txn)}, ${amountEtb * 100}, ${sql(name)}, ${sql(phone)}, ${paidAt}, (SELECT max(id) FROM raw_sms),
+  ${sql(status)}, ${status === "claimed" ? paidAt + MINUTE : "NULL"}, ${sql(status === "claimed" ? randomBytes(32).toString("base64url") : null)},
+  ${sql(status === "flagged" ? "amount_too_low" : null)}, ${paidAt + 5000});`,
+    );
+  };
+
+  // Underpaid and already flagged, ready for "Approve for…" (demo step 11).
+  payment("DEMOFLAG01", 300, 20, now - 40 * MINUTE, "flagged");
+
+  for (const [i, h] of HISTORY_PAYMENTS.entries()) {
+    const paidAt = now - Math.round(h.daysAgo * DAY);
+    const orderedAt = paidAt + MINUTE;
+    payment(h.txn, 500, 21 + i, paidAt, "claimed");
+    out.push(
+      `INSERT INTO orders (payment_id, manual_version_id, created_by, created_at)
+SELECT p.id, v.id, 'auto', ${orderedAt} FROM payments p, manual_versions v JOIN car_models m ON m.id = v.car_model_id
+WHERE p.transaction_number = ${sql(h.txn)} AND m.slug = ${sql(h.slug)} AND v.language = 'en';`,
+      tokenInsert(
+        `orders o JOIN payments p ON p.id = o.payment_id WHERE p.transaction_number = ${sql(h.txn)}`,
+        h.link,
+        orderedAt,
+      ),
+    );
+  }
+
+  // An admin order without a payment (FR-26).
+  const manualAt = now - 3 * HOUR;
+  out.push(
+    `INSERT INTO orders (payment_id, manual_version_id, created_by, admin_note, created_at)
+SELECT NULL, v.id, 'admin', 'Demo: paid from bank app, checked the statement', ${manualAt}
+FROM manual_versions v JOIN car_models m ON m.id = v.car_model_id WHERE m.slug = 'byd-e2-2025' AND v.language = 'en';`,
+    tokenInsert(
+      "orders o WHERE o.payment_id IS NULL AND o.created_by = 'admin'",
+      "active",
+      manualAt,
+    ),
+  );
+
+  // Phone checked in 10 minutes ago: the banner is green for the next 35 minutes.
+  const beat = now - 10 * MINUTE;
+  out.push(
+    `INSERT INTO system_status (key, value, updated_at) VALUES ('last_heartbeat_at', ${sql(String(beat))}, ${beat}), ('battery', '76', ${beat});`,
+  );
+
+  out.push(
+    rawSmsInsert(
+      "Congratulations! You have won a prize. Send your PIN to claim it now.",
+      now - 2 * HOUR,
+      "failed",
+      null,
+      now,
+    ),
+    rawSmsInsert(
+      "Dear Customer telebirr service will be unavailable tonight from 01:00 to 03:00 for maintenance.",
+      now - 26 * HOUR,
+      "failed",
+      null,
+      now,
+    ),
+    rawSmsInsert(
+      `Dear Customer You have recharged airtime of ETB 50.00 on ${eatDate(now - 5 * HOUR)}. Your current E-Money Account balance is ETB 1,200.00. Thank you for using telebirr`,
+      now - 5 * HOUR,
+      "ignored",
+      "airtime-v1",
+      now,
+    ),
+  );
+  return out;
+};
+
+export const SEED_SECTIONS: SeedSection[] = [
+  resetSection,
+  catalogSection,
+  phase1Payments,
+  phase2Admin,
+];
 
 /** A minimal valid one-page PDF 1.4 with a single line of text. */
 export function demoPdf(m: Pick<DemoModel, "name" | "year">): Buffer {
