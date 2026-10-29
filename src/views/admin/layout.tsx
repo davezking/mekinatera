@@ -4,6 +4,7 @@ import type { Child } from "hono/jsx";
 import type { JSX } from "hono/jsx/jsx-runtime";
 import type { AdminEnv } from "../../admin-env";
 import { LogoIcon } from "../layout";
+import { StatusBanner } from "./status-banner";
 
 const NAV = [
   ["Dashboard", "/admin"],
@@ -20,6 +21,8 @@ type AdminLayoutProps = {
   adminEmail: string;
   publicSiteUrl: string;
   env: string;
+  /** Phone status banner (FR-27); rendered into #status-banner. */
+  banner?: Child;
   children?: Child;
 };
 
@@ -29,6 +32,7 @@ export function AdminLayout({
   adminEmail,
   publicSiteUrl,
   env,
+  banner,
   children,
 }: AdminLayoutProps) {
   return (
@@ -68,7 +72,7 @@ export function AdminLayout({
         </header>
         <main class="site-main">
           <div class="container stack">
-            <div id="status-banner" />
+            <div id="status-banner">{banner}</div>
             {children}
             <p class="muted">
               <a href={publicSiteUrl}>View public site</a>
@@ -82,6 +86,7 @@ export function AdminLayout({
 
 /** Renders a full admin page. Later admin routes use this too. */
 export function adminPage(c: Context<AdminEnv>, title: string, current: string, body: JSX.Element) {
+  const phone = c.get("phone");
   return c.html(
     <>
       {raw("<!doctype html>")}
@@ -91,6 +96,7 @@ export function adminPage(c: Context<AdminEnv>, title: string, current: string, 
         adminEmail={c.get("adminEmail")}
         publicSiteUrl={c.env.PUBLIC_SITE_URL}
         env={c.env.ENVIRONMENT}
+        banner={phone && <StatusBanner status={phone.status} now={phone.now} />}
       >
         {body}
       </AdminLayout>

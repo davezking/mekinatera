@@ -35,7 +35,8 @@
     "ACCESS_TEAM_DOMAIN": "https://dev.cloudflareaccess.com",
     "ACCESS_AUD": "dev-aud",
     "ADMIN_EMAIL": "dev@localhost",
-    "PUBLIC_SITE_URL": "http://localhost:8787"
+    "PUBLIC_SITE_URL": "http://localhost:8787",
+    "HEARTBEAT_STALE_MINUTES": "45"
   },
   "env": {
     "staging": {
@@ -62,7 +63,8 @@
         "ACCESS_TEAM_DOMAIN": "https://REPLACE_WITH_TEAM.cloudflareaccess.com",
         "ACCESS_AUD": "REPLACE_WITH_STAGING_ACCESS_AUD",
         "ADMIN_EMAIL": "REPLACE_WITH_OWNER_EMAIL",
-        "PUBLIC_SITE_URL": "https://byd-manuals-staging.REPLACE_WITH_ACCOUNT.workers.dev"
+        "PUBLIC_SITE_URL": "https://byd-manuals-staging.REPLACE_WITH_ACCOUNT.workers.dev",
+        "HEARTBEAT_STALE_MINUTES": "45"
       }
     },
     "production": {
@@ -89,7 +91,8 @@
         "ACCESS_TEAM_DOMAIN": "https://REPLACE_WITH_TEAM.cloudflareaccess.com",
         "ACCESS_AUD": "REPLACE_WITH_PRODUCTION_ACCESS_AUD",
         "ADMIN_EMAIL": "REPLACE_WITH_OWNER_EMAIL",
-        "PUBLIC_SITE_URL": "https://byd-manuals.REPLACE_WITH_ACCOUNT.workers.dev"
+        "PUBLIC_SITE_URL": "https://byd-manuals.REPLACE_WITH_ACCOUNT.workers.dev",
+        "HEARTBEAT_STALE_MINUTES": "45"
       }
     }
   }
