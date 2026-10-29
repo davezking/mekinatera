@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AdminEnv } from "../admin-env";
+import { getPhoneStatus, staleMinutes } from "../lib/heartbeat";
 import { HOUR, nowMs } from "../lib/time";
 import { adminAuth } from "../middleware/admin-auth";
 import { Dashboard, type DashboardCounts } from "../views/admin/dashboard";
@@ -13,6 +14,16 @@ import { uploadsRoutes } from "./admin/uploads";
 export const adminRoutes = new Hono<AdminEnv>();
 
 adminRoutes.use("*", adminAuth());
+// Every admin page shows the phone status banner (FR-27), including forms re-rendered after a
+// POST. Uploads (PUT) return JSON and skip the query.
+adminRoutes.use("*", async (c, next) => {
+  if (c.req.method !== "PUT") {
+    const now = nowMs();
+    const stale = staleMinutes(c.env.HEARTBEAT_STALE_MINUTES);
+    c.set("phone", { status: await getPhoneStatus(c.env.DB, now, stale), now });
+  }
+  await next();
+});
 adminRoutes.route("/catalog", catalogRoutes);
 adminRoutes.route("/uploads", uploadsRoutes);
 adminRoutes.route("/payments", paymentsRoutes);

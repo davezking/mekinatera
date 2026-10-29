@@ -1118,6 +1118,11 @@ svg {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+.phone-status--ok {
+  color: var(--ok);
+  font-size: 14px;
+  font-weight: 600;
+}
 .notice-ok {
   padding: 12px 14px;
   border-radius: var(--radius-m);

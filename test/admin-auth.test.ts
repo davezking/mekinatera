@@ -201,7 +201,7 @@ describe("admin Worker", () => {
     ]) {
       expect(html).toContain(`href="${href}"`);
     }
-    expect(html).toContain('<div id="status-banner"></div>');
+    expect(html).toContain('<div id="status-banner"><div class="notice-error" role="alert">');
     expect(html).toContain('href="http://localhost:8787"');
   });
 });
