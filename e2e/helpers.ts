@@ -4,10 +4,50 @@ import {
   type Page,
   type Response,
   request,
+  type test,
 } from "@playwright/test";
 
 export const BASE_URL = "http://localhost:8787";
 const WEBHOOK_SECRET = "dev-webhook-secret";
+
+/**
+ * Any token passes siteverify with the Turnstile test secret in .dev.vars
+ * (1x0000000000000000000000000000000AA), so API-level claims can send this one.
+ */
+export const TEST_TURNSTILE_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+
+/** Honoured only when ENVIRONMENT is development (src/lib/rate-limit.ts clientIp). */
+export const CLIENT_IP_HEADER = "X-Test-Client-IP";
+
+/** A random 10.x.y.z address, so each spec file has its own rate-limit bucket. */
+export function uniqueClientIp(): string {
+  const octet = () => 1 + Math.floor(Math.random() * 254);
+  return `10.${octet()}.${octet()}.${octet()}`;
+}
+
+/** Requests to the two local Workers (public :8787, admin :8788), not to Turnstile or others. */
+const LOCAL_WORKERS = /^http:\/\/localhost:878[78]\//;
+
+/**
+ * Gives this spec file its own client IP: every browser request to the local Workers carries
+ * X-Test-Client-IP. A route is used instead of `extraHTTPHeaders`, which Chromium adds to every
+ * request, including Turnstile's own, where a custom header forces CORS preflights. Returns the
+ * IP, for API-level claims made with the `request` fixture.
+ */
+export function useUniqueClientIp(t: typeof test): string {
+  const ip = uniqueClientIp();
+  t.beforeEach(async ({ context }) => {
+    await context.route(LOCAL_WORKERS, (route) =>
+      route.continue({ headers: { ...route.request().headers(), [CLIENT_IP_HEADER]: ip } }),
+    );
+  });
+  return ip;
+}
+
+/** Waits until the Turnstile check has passed: the claim button is enabled only with a token. */
+export async function waitForTurnstile(page: Page): Promise<void> {
+  await expect(page.getByRole("button", { name: "Get my PDF" })).toBeEnabled({ timeout: 20_000 });
+}
 
 /** Current time in Ethiopia (UTC+3) as telebirr writes it: DD/MM/YYYY HH:mm:ss. */
 export function eatNow(): string {
@@ -56,11 +96,17 @@ export async function postSms({
   }
 }
 
+/** Fills and submits the claim form on the current checkout page, once Turnstile has passed. */
+export async function submitClaim(page: Page, txn: string): Promise<void> {
+  await page.locator("#txn").fill(txn);
+  await waitForTurnstile(page);
+  await page.getByRole("button", { name: "Get my PDF" }).click();
+}
+
 /** Opens a checkout page and submits a transaction number in the claim form. */
 export async function claimOnPage(page: Page, slug: string, txn: string): Promise<void> {
   await page.goto(`/m/${slug}`);
-  await page.locator("#txn").fill(txn);
-  await page.getByRole("button", { name: "Get my PDF" }).click();
+  await submitClaim(page, txn);
 }
 
 /** The id of a model's visible `en` version, from the public API. */

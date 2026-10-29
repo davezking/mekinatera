@@ -1,9 +1,19 @@
 // One test per step of docs/phases/phase-1-demo.md. Each test uses its own seeded or fresh
 // transaction number, so the tests don't depend on each other's state.
 import { expect, test } from "@playwright/test";
-import { claimOnPage, freshTxn, postSms, versionIdFor } from "./helpers";
+import {
+  CLIENT_IP_HEADER,
+  claimOnPage,
+  freshTxn,
+  postSms,
+  TEST_TURNSTILE_TOKEN,
+  useUniqueClientIp,
+  versionIdFor,
+} from "./helpers";
 
 const SEALION = "byd-sealion-2026";
+// Its own rate-limit bucket: this file makes 8 claims, and other specs make more (Phase 3).
+const clientIp = useUniqueClientIp(test);
 
 test("step 1: catalog lists the models, prices and Coming soon", async ({ page }) => {
   await page.goto("/");
@@ -117,7 +127,8 @@ test("step 10: a payment older than 7 days is refused", async ({ page }) => {
 test("step 11: a download link works 3 times, then returns 410", async ({ request }) => {
   const versionId = await versionIdFor(request, SEALION);
   const claim = await request.post("/api/claim", {
-    data: { transactionNumber: "DEMOPAY004", versionId },
+    headers: { [CLIENT_IP_HEADER]: clientIp },
+    data: { transactionNumber: "DEMOPAY004", versionId, turnstileToken: TEST_TURNSTILE_TOKEN },
   });
   const body = (await claim.json()) as { status: string; downloadUrl: string };
   expect(body.status).toBe("ok");
