@@ -211,13 +211,28 @@ export async function recordClaimAttempt(
   await recordAttempt(db, { ...input, origin: "" }, resultCode);
 }
 
+type TokenEnv = Pick<Env, "DB" | "TOKEN_TTL_HOURS" | "TOKEN_MAX_DOWNLOADS">;
+
+/** A fresh download token: the raw value (shown once) and what gets stored. */
+async function newToken(env: TokenEnv, now: number) {
+  const token = generateToken();
+  return {
+    token,
+    tokenHash: await hashToken(token),
+    expiresAt: now + positiveInt("TOKEN_TTL_HOURS", env.TOKEN_TTL_HOURS) * HOUR,
+    maxDownloads: positiveInt("TOKEN_MAX_DOWNLOADS", env.TOKEN_MAX_DOWNLOADS),
+  };
+}
+
+export type CreatedLink = { orderId: number; token: string };
+
 /**
- * Creates an order and a download token in one batch, without the auto-claim guard. For
- * admin approvals (P2-S2-T3). The caller must already have checked the payment, if any.
- * Returns the raw token; only its hash is stored.
+ * Creates an order and a download token in one batch, without any payment check. For admin
+ * orders without a payment (FR-26) and for tests. Returns the order id and the raw token; only
+ * the token's hash is stored.
  */
-export async function createOrderWithToken(
-  env: Pick<Env, "DB" | "TOKEN_TTL_HOURS" | "TOKEN_MAX_DOWNLOADS">,
+export async function createOrder(
+  env: TokenEnv,
   args: {
     paymentId: number | null;
     versionId: number;
@@ -225,12 +240,9 @@ export async function createOrderWithToken(
     adminNote: string | null;
     now: number;
   },
-): Promise<string> {
+): Promise<CreatedLink> {
   const db = env.DB;
-  const token = generateToken();
-  const tokenHash = await hashToken(token);
-  const expiresAt = args.now + positiveInt("TOKEN_TTL_HOURS", env.TOKEN_TTL_HOURS) * HOUR;
-  const maxDownloads = positiveInt("TOKEN_MAX_DOWNLOADS", env.TOKEN_MAX_DOWNLOADS);
+  const t = await newToken(env, args.now);
   const [order] = await db.batch<{ id: number }>([
     db
       .prepare(
@@ -243,8 +255,92 @@ export async function createOrderWithToken(
         `INSERT INTO download_tokens (order_id, token_hash, expires_at, max_downloads, download_count, created_at)
          VALUES (last_insert_rowid(), ?, ?, ?, 0, ?)`,
       )
-      .bind(tokenHash, expiresAt, maxDownloads, args.now),
+      .bind(t.tokenHash, t.expiresAt, t.maxDownloads, args.now),
   ]);
-  if (!order?.results[0]) throw new Error("order insert returned no id");
-  return token;
+  const orderId = order?.results[0]?.id;
+  if (orderId === undefined) throw new Error("order insert returned no id");
+  return { orderId, token: t.token };
+}
+
+/** createOrder, returning only the raw token. */
+export async function createOrderWithToken(
+  env: TokenEnv,
+  args: Parameters<typeof createOrder>[1],
+): Promise<string> {
+  return (await createOrder(env, args)).token;
+}
+
+/**
+ * Admin approval of a recorded payment (FR-26): claims it whatever its amount or age, as long as
+ * it is still unclaimed or flagged. Same per-request claim_ref guard as the auto-claim (step 7),
+ * so when an admin and a buyer race, exactly one of them gets the order. null if the payment
+ * was already claimed (or does not exist).
+ */
+export async function approvePayment(
+  env: TokenEnv,
+  args: { paymentId: number; versionId: number; adminNote: string; now: number },
+): Promise<CreatedLink | null> {
+  const db = env.DB;
+  const claimRef = generateToken();
+  const t = await newToken(env, args.now);
+  const [claimed, order] = await db.batch<{ id: number }>([
+    db
+      .prepare(
+        `UPDATE payments SET status = 'claimed', claimed_at = ?, claim_ref = ?
+         WHERE id = ? AND status IN ('unclaimed', 'flagged')`,
+      )
+      .bind(args.now, claimRef, args.paymentId),
+    db
+      .prepare(
+        `INSERT INTO orders (payment_id, manual_version_id, created_by, admin_note, created_at)
+         SELECT id, ?, 'admin', ?, ? FROM payments WHERE claim_ref = ? RETURNING id`,
+      )
+      .bind(args.versionId, args.adminNote, args.now, claimRef),
+    db
+      .prepare(
+        `INSERT INTO download_tokens (order_id, token_hash, expires_at, max_downloads, download_count, created_at)
+         SELECT o.id, ?, ?, ?, 0, ? FROM orders o JOIN payments p ON p.id = o.payment_id
+         WHERE p.claim_ref = ?`,
+      )
+      .bind(t.tokenHash, t.expiresAt, t.maxDownloads, args.now, claimRef),
+  ]);
+  const orderId = order?.results[0]?.id;
+  if (claimed?.meta.changes !== 1 || orderId === undefined) return null;
+  return { orderId, token: t.token };
+}
+
+/**
+ * Replaces an order's download link: revokes every token of the order and adds a new one with a
+ * fresh allowance, in one batch. The note is appended to the order's admin_note. null if there
+ * is no such order.
+ */
+export async function regenerateLink(
+  env: TokenEnv,
+  args: { orderId: number; adminNote: string; now: number },
+): Promise<CreatedLink | null> {
+  const db = env.DB;
+  const t = await newToken(env, args.now);
+  const line = `New link ${new Date(args.now).toISOString().slice(0, 16)}Z: ${args.adminNote}`;
+  const [, inserted] = await db.batch([
+    db
+      .prepare(
+        "UPDATE download_tokens SET revoked_at = ? WHERE order_id = ? AND revoked_at IS NULL",
+      )
+      .bind(args.now, args.orderId),
+    db
+      .prepare(
+        `INSERT INTO download_tokens (order_id, token_hash, expires_at, max_downloads, download_count, created_at)
+         SELECT id, ?, ?, ?, 0, ? FROM orders WHERE id = ?`,
+      )
+      .bind(t.tokenHash, t.expiresAt, t.maxDownloads, args.now, args.orderId),
+    db
+      .prepare(
+        `UPDATE orders SET admin_note = CASE WHEN admin_note IS NULL OR admin_note = '' THEN ?
+           ELSE admin_note || char(10) || ? END
+         WHERE id = ?`,
+      )
+      .bind(line, line, args.orderId),
+  ]);
+  if (inserted?.meta.changes !== 1) return null;
+  return { orderId: args.orderId, token: t.token };
 }
