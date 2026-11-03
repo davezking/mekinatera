@@ -3,6 +3,8 @@
 import { createPoller, formatElapsed, isValidTxn, messageFor, normalizeTxn } from "./claim-core.js";
 
 const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+/** After this long waiting, suggest the number may have a typo. */
+const TYPO_HINT_AFTER_MS = 60 * 1000;
 
 const form = document.getElementById("claim-form");
 const input = document.getElementById("txn");
@@ -147,13 +149,9 @@ if (form && input && status) {
     );
   }
 
-  function resetButton() {
-    const reset = el(
-      "button",
-      { type: "button", class: "btn btn-secondary btn-block" },
-      "Use a different number",
-    );
-    reset.addEventListener("click", () => showIdle({ keepValue: false }));
+  function resetButton({ label = "Use a different number", keepValue = false } = {}) {
+    const reset = el("button", { type: "button", class: "btn btn-secondary btn-block" }, label);
+    reset.addEventListener("click", () => showIdle({ keepValue }));
     return reset;
   }
 
@@ -205,6 +203,13 @@ if (form && input && status) {
     status.replaceChildren();
     form.hidden = true;
     const elapsed = el("span", { class: "mono" }, formatElapsed(Date.now() - startedAt));
+    // A typo is the usual reason for a long wait: the number stays in the form to fix it.
+    const change = resetButton({ label: "Change number", keepValue: true });
+    const note = el(
+      "span",
+      { class: "claim-waiting__note" },
+      "We check every 5 seconds for up to 10 minutes.",
+    );
     panel.replaceChildren(
       el(
         "div",
@@ -230,15 +235,37 @@ if (form && input && status) {
         ),
         el(
           "span",
-          { class: "claim-waiting__note" },
-          "We check every 5 seconds for up to 10 minutes.",
+          { class: "claim-waiting__check" },
+          "Check this matches your telebirr confirmation letter by letter. Wrong number? Tap Change number.",
         ),
+        note,
       ),
-      resetButton(),
+      change,
     );
-    elapsedTimer = setInterval(() => {
-      elapsed.textContent = formatElapsed(Date.now() - startedAt);
-    }, 1000);
+    let typoHintShown = false;
+    const tick = () => {
+      const ms = Date.now() - startedAt;
+      elapsed.textContent = formatElapsed(ms);
+      if (!typoHintShown && ms >= TYPO_HINT_AFTER_MS) {
+        typoHintShown = true;
+        note.before(
+          el(
+            "div",
+            { class: "notice-warn claim-waiting__typo", role: "status" },
+            icon("clock"),
+            el(
+              "span",
+              {},
+              el("strong", {}, "Still waiting?"),
+              " The number may have a typo. Tap Change number and check it against telebirr.",
+            ),
+          ),
+        );
+        change.classList.replace("btn-secondary", "btn-dark");
+      }
+    };
+    tick();
+    elapsedTimer = setInterval(tick, 1000);
     startPolling();
   }
 
