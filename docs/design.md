@@ -59,7 +59,7 @@ Radii: buttons/inputs 12–14px, cards 20px (22px desktop), pills fully round. S
 | idle | label "Transaction number", input, hint, accent button "Get my PDF" |
 | checking | same, button "Checking…" with a spinner, disabled |
 | error | error notice (title + text) above the form; input border red; form stays usable |
-| waiting | form replaced by: 64px `--accent-soft` circle with spinner, "Waiting for telebirr confirmation", "Keep this page open. It usually takes under a minute.", a pill "`TXN` · m:ss", "We check every 5 seconds for up to 10 minutes.", and a secondary "Use a different number" |
+| waiting | form replaced by: 64px `--accent-soft` circle with spinner, "Waiting for telebirr confirmation", "Keep this page open. It usually takes under a minute.", a pill "`TXN` · m:ss", "Check this matches your telebirr confirmation letter by letter. Wrong number? Tap Change number.", "We check every 5 seconds for up to 10 minutes.", and a secondary "Change number" that reopens the form with the number kept for editing. After 1 minute of waiting, a warn notice "**Still waiting?** The number may have a typo. Tap Change number and check it against telebirr." appears and "Change number" turns dark |
 | success | check icon + "Payment confirmed" + txn in mono, green (`--ok`) "Download PDF" button with a download icon, the warn notice "**Save the PDF to your phone now.** This link works for 24 hours and up to 3 downloads. There are no accounts, so we can't show it again.", and "Use a different number" |
 
 Error copy (title / text; `{SUPPORT}` = `SUPPORT_CONTACT`):

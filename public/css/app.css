@@ -756,6 +756,15 @@ svg {
 .claim-waiting__note {
   font-size: 12px;
 }
+.claim-waiting__check {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.claim-waiting__typo {
+  text-align: left;
+  width: 100%;
+}
 .claim-waiting__body .muted {
   font-size: 14px;
   line-height: 1.5;
